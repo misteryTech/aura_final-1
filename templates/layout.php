@@ -1,12 +1,14 @@
-<?php include __DIR__ . '/header.php';
-require_once __DIR__ . '/../database/connection.php';?>
+<?php
+include __DIR__ . '/header.php';
+require_once __DIR__ . '/../database/connection.php';
+
+// DO NOT put session_start() here
+?>
 
 <?php
 
-session_start();
-
 // If not logged in → redirect to login
-if (!isset($_SESSION['user_id'])) {
+if (!isset($_SESSION['school_id'])) {
     header("Location: ../login.php");
     exit;
 }
@@ -18,7 +20,7 @@ if (!isset($_SESSION['position'])) {
 }
 
 // Allowed roles
-$allowed_roles = ['member', 'staff', 'treasurer', 'president'];
+$allowed_roles = ['student', 'staff', 'treasurer', 'admin'];
 
 // Check if user has allowed role
 if (!in_array($_SESSION['position'], $allowed_roles)) {
@@ -26,25 +28,24 @@ if (!in_array($_SESSION['position'], $allowed_roles)) {
     exit;
 }
 
-// Session variables for use
+// Session variables
 $fullname = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
 $position = $_SESSION['position'];
-$chapter  = $_SESSION['chapter'];
 $account  = $_SESSION['account'];
-$osca_id  = $_SESSION['osca_id'];
+$school_id  = $_SESSION['school_id'];
 
 ?>
+
 <body>
 
 <?php include __DIR__ . '/topnav.php'; ?>
 <?php include __DIR__ . '/sidenav.php'; ?>
 
 <main id="main" class="main">
-    <?php echo $content; ?>
+    <?= $content; ?>
 </main>
 
 <?php include __DIR__ . '/footer.php'; ?>
-
 
 </body>
 </html>

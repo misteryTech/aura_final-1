@@ -46,21 +46,11 @@ if (isset($_SESSION['user_id'])) {
                              <div id="responseBox" class="mt-3 text-success"></div>
                             <div class="row">
                                 <div class="col-md-6">
-                                    <label for="oscaId" class="form-label">OSCA ID No.</label>
-                                    <input type="text" name="osca_id" class="form-control" id="oscaId" required>
+                                    <label for="oscaId" class="form-label">School ID.</label>
+                                    <input type="text" name="school_id" class="form-control" id="school_id" required>
                                     <div class="invalid-feedback">Please enter your OSCA ID!</div>
                                 </div>
 
-                                <div class="col-md-6">
-                                  <label for="Chapter" class="form-label">Chapter</label>
-                                   <select name="chapter" class="form-select" id="chapter" required>
-                                    <option value="">Choose...</option>
-                                    <option value="Chapter1">Chapter 1</option>
-
-                                    </select>
-                                    <div class="invalid-feedback">Please select Chapter!</div>
-
-                                </div>
                             </div>
 
                             <div class="row">
@@ -95,40 +85,7 @@ if (isset($_SESSION['user_id'])) {
                             </div>
 
 
-                            <div class="col-md-4">
-                                <label for="civilStatus" class="form-label">Civil Status</label>
-                                <input type="text" name="civil_status" class="form-control" id="civilStatus" required>
-                                <div class="invalid-feedback">Please enter your civil status!</div>
-                            </div>
-
                             <!-- Row 2 -->
-
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <label for="pensioner" class="form-label">Pensioner</label>
-                                    <select name="pensioner" class="form-select" id="pensioner" required>
-                                    <option value="">Choose...</option>
-                                    <option value="Yes">Yes</option>
-                                    <option value="No">No</option>
-                                    </select>
-                                    <div class="invalid-feedback">Please select pensioner status!</div>
-                                </div>
-
-
-                                <div class="col-md-6">
-                                    <label for="pensionDetails" class="form-label">Pension Details</label>
-                                    <input type="text" name="pension_details" class="form-control" id="pensionDetails">
-                                </div>
-
-
-                            </div>
-
-                            <div class="col-md-6">
-                                <label for="email" class="form-label">Email ( Guardian / Contact Person )</label>
-                                <input type="email" name="email" class="form-control" id="email" required>
-                                <div class="invalid-feedback">Please enter a valid email address!</div>
-                            </div>
-
 
                             <div class="col-md-6">
                                 <label for="password" class="form-label">Password</label>

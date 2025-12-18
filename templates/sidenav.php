@@ -12,20 +12,29 @@
     </li>
 
     <!-- Staff-specific menu -->
-    <?php if ($position === "staff") : ?>
+    <?php if ($position === "admin") : ?>
       <li class="nav-item">
         <a class="nav-link collapsed" data-bs-target="#staff-nav" data-bs-toggle="collapse" href="#">
           <i class="bi bi-person"></i>
-          <span>Members</span>
+          <span>Student</span>
           <i class="bi bi-chevron-down ms-auto"></i>
         </a>
         <ul id="staff-nav" class="nav-content collapse" data-bs-parent="#sidebar-nav">
           <li>
-            <a href="staff/">
+            <a href="student_list.php">
               <i class="bi bi-circle"></i>
-              <span>Associate</span>
+              <span>Student List</span>
             </a>
           </li>
+
+           <li>
+            <a href="student_request.php">
+              <i class="bi bi-circle"></i>
+              <span>Student Request</span>
+            </a>
+          </li>
+
+
         </ul>
       </li>
     <?php endif; ?>

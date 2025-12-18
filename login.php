@@ -43,19 +43,19 @@ if (isset($_SESSION['user_id'])) {
                   <form id="loginProcess" class="row g-3 needs-validation" novalidate>
                       <div id="responseBox" class="mt-3"></div>
                       <div class="col-12">
-                      <label for="osca_id" class="form-label">OSCA ID Number</label>
+                      <label for="school_id" class="form-label">School ID Number</label>
                       <div class="input-group has-validation">
                         <span class="input-group-text" id="inputGroupPrepend">#</span>
                         <input
                           type="text"
-                          name="osca_id"
+                          name="school_id"
                           class="form-control"
-                          id="osca_id"
+                          id="school_id"
                           aria-describedby="inputGroupPrepend"
                           required
                         >
                         <div class="invalid-feedback">
-                          Please enter your OSCA ID.
+                          Please enter your School ID.
                         </div>
                       </div>
                     </div>
