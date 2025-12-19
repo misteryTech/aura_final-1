@@ -148,23 +148,6 @@ ob_start(); // Capture page content
                   </div>
                 </div>
 
-                <!-- Row 2: Facial Recognition -->
-                <div class="row">
-                  <div class="col-md-6">
-                    <label for="facialRecognition" class="form-label">Facial Recognition</label>
-                    <input type="text" name="facial_recognition" class="form-control" id="facialRecognition" required>
-                    <div class="invalid-feedback">Please enter your facial recognition data!</div>
-                  </div>
-                </div>
-
-                <!-- Row 3: Biometrics -->
-                <div class="row">
-                  <div class="col-md-6">
-                    <label for="biometrics" class="form-label">Biometrics</label>
-                    <input type="text" name="biometrics" class="form-control" id="biometrics" required>
-                    <div class="invalid-feedback">Please enter your biometrics!</div>
-                  </div>
-                </div>
 
                 <!-- Submit Button -->
                 <div class="col-12">
