@@ -1,0 +1,141 @@
+#include <Adafruit_Fingerprint.h>
+
+#define BUTTON_PIN  4   // GPIO4 for registration button
+
+// Fingerprint sensor UART pins
+#define FINGER_RX   16  // ESP32 RX2 → Sensor TX
+#define FINGER_TX   17  // ESP32 TX2 → Sensor RX
+
+HardwareSerial FingerSerial(2);   // UART2
+Adafruit_Fingerprint finger(&FingerSerial);
+
+uint8_t nextID = 1; // Next fingerprint ID to register
+unsigned long buttonPressTime = 0;
+bool buttonHeld = false;
+
+void setup() {
+  Serial.begin(115200);
+
+  // Button setup
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  // Start fingerprint sensor UART
+  FingerSerial.begin(57600, SERIAL_8N1, FINGER_RX, FINGER_TX);
+
+  Serial.println("Initializing fingerprint sensor...");
+  if (!finger.verifyPassword()) {
+    Serial.println("❌ Sensor not found!");
+    while (1);
+  }
+
+  Serial.println("✅ Sensor ready");
+  Serial.println("Waiting for finger for validation...");
+}
+
+// ---------------- LOOP ----------------
+void loop() {
+  // Handle button press / long press
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    if (!buttonHeld) {
+      buttonPressTime = millis();
+      buttonHeld = true;
+    }
+
+    // Long press (>3 seconds) triggers reset
+    if (millis() - buttonPressTime > 3000) {
+      Serial.println("\n⚠️ Long press detected: Resetting all fingerprints...");
+      resetFingerprintData();
+      buttonHeld = false;
+      delay(500); // small delay to avoid double-trigger
+    }
+
+  } else if (buttonHeld) {
+    // Short press triggers enrollment
+    if (millis() - buttonPressTime < 3000) {
+      Serial.println("\n🔹 Short press detected: Starting fingerprint registration");
+      enrollFingerprint(nextID);
+      nextID++;
+      Serial.println("Registration done. Back to validation mode...");
+    }
+    buttonHeld = false;
+  }
+
+  // Validation mode
+  int id = checkFingerprint();
+  if (id >= 0) {
+    Serial.print("✅ Fingerprint MATCH! ID: ");
+    Serial.println(id);
+    delay(2000); // prevent multiple reads
+    Serial.println("Waiting for next finger...");
+  }
+}
+
+// ---------------- ENROLL FUNCTION ----------------
+void enrollFingerprint(uint8_t id) {
+  int p = -1;
+
+  Serial.println("Place finger for first scan");
+  while (p != FINGERPRINT_OK) {
+    p = finger.getImage();
+  }
+  Serial.println("🟢 First scan done");
+  finger.image2Tz(1);
+
+  Serial.println("Remove finger");
+  delay(2000);
+  while (finger.getImage() != FINGERPRINT_NOFINGER);
+
+  Serial.println("Place SAME finger again for second scan");
+  p = -1;
+  while (p != FINGERPRINT_OK) {
+    p = finger.getImage();
+  }
+  Serial.println("🟢 Second scan done");
+  finger.image2Tz(2);
+
+  p = finger.createModel();
+  if (p != FINGERPRINT_OK) {
+    Serial.println("❌ Fingerprints did not match, try again");
+    return;
+  }
+
+  p = finger.storeModel(id);
+  if (p == FINGERPRINT_OK) {
+    Serial.print("✅ Fingerprint stored successfully! ID = ");
+    Serial.println(id);
+  } else {
+    Serial.println("❌ Storage failed");
+  }
+}
+
+// ---------------- VALIDATION FUNCTION ----------------
+int checkFingerprint() {
+  int p = finger.getImage();
+  if (p == FINGERPRINT_NOFINGER) return -1;
+  if (p != FINGERPRINT_OK) return -1;
+
+  p = finger.image2Tz();
+  if (p != FINGERPRINT_OK) return -1;
+
+  p = finger.fingerSearch();
+  if (p == FINGERPRINT_OK) {
+    return finger.fingerID;
+  } else if (p == FINGERPRINT_NOTFOUND) {
+    Serial.println("❌ No match found");
+    delay(1000);
+    return -1;
+  } else {
+    return -1;
+  }
+}
+
+// ---------------- RESET FUNCTION ----------------
+void resetFingerprintData() {
+  int p = finger.emptyDatabase();
+  if (p == FINGERPRINT_OK) {
+    Serial.println("✅ All fingerprints successfully deleted!");
+    nextID = 1;  // Reset ID counter
+  } else {
+    Serial.println("❌ Failed to delete fingerprints");
+  }
+}
