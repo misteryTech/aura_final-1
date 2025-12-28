@@ -59,7 +59,7 @@ function compareFaces($token1, $token2) {
 ======================= */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $student_id  =  'student101';
+    $student_id  =  'sample1';
     $facial_data = $_POST['facial_data'] ?? '';
 
     if (!$student_id || !$facial_data) {

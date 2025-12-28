@@ -7,7 +7,7 @@ if (isset($_SESSION['user_id'])) {
         header("Location: admin/dashboard.php");
         exit;
     } else {
-        header("Location: member/dashboard.php");
+        header("Location: student/dashboard.php");
         exit;
     }
 }
@@ -29,7 +29,7 @@ if (isset($_SESSION['user_id'])) {
               <div class="d-flex justify-content-center py-4">
                 <a href="index.html" class="logo d-flex align-items-center w-auto">
                   <img src="assets/img/logo.png" alt="">
-                  <span class="d-none d-lg-block">Member Registration</span>
+                  <span class="d-none d-lg-block">Student Registration</span>
                 </a>
               </div><!-- End Logo -->
 
@@ -119,7 +119,7 @@ if (isset($_SESSION['user_id'])) {
                 <!-- You can delete the links only if you purchased the pro version. -->
                 <!-- Licensing information: https://bootstrapmade.com/license/ -->
                 <!-- Purchase the pro version with working PHP/AJAX contact form: https://bootstrapmade.com/nice-admin-bootstrap-admin-html-template/ -->
-                 Record <a href="#">Management System</a>
+                 Attendance <a href="#">Management System</a>
               </div>
 
             </div>

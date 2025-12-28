@@ -34,6 +34,15 @@
             </a>
           </li>
 
+            <li>
+            <a href="student_fingerprint.php">
+              <i class="bi bi-circle"></i>
+              <span>Student Biometrics</span>
+            </a>
+          </li>
+
+
+
 
         </ul>
       </li>
