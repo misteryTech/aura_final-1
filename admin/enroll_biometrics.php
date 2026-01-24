@@ -58,37 +58,85 @@ $conn->close();
     </div>
 
     <!-- Fingerprint Registration Form -->
-<div class="col-6">
-  <div class="card">
-    <div class="card-body">
-      <h5 class="card-title">Register Fingerprint</h5>
+    <div class="col-6">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Register Fingerprint</h5>
 
-      <!-- Notification placeholder -->
-      <div id="fingerprintNotif"></div>
-
-      <!-- Wrap the form in a container -->
+          <!-- Fingerprint Button & Notification -->
       <div id="fingerprintFormContainer">
-        <form id="finger_print_registration">
-          <input type="hidden" name="student_id" value="<?= htmlspecialchars($student_id) ?>">
+        <button id="registerFingerprintBtn" class="btn btn-primary">Register Fingerprint</button>
+        <div id="fingerprintNotif" class="mt-3"></div>
+      </div>
 
-          <div class="mb-3">
-            <label for="fingerprintId" class="form-label">Fingerprint ID</label>
-            <input type="number" class="form-control" id="fingerprintId" name="fingerprintId" required>
-          </div>
 
-          <button type="submit" class="btn btn-primary">Save Fingerprint</button>
-        </form>
+        </div>
       </div>
     </div>
-  </div>
-</div>
-
 
   </div>
 </section>
 
-<script src="transaction/js/finger_print_registration.js"></script>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../templates/layout.php';
 ?>
+
+<!-- JS to trigger ESP32 fingerprint registration -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const registerBtn = document.getElementById("registerFingerprintBtn");
+  const notifDiv = document.getElementById("fingerprintNotif");
+
+  registerBtn.addEventListener("click", function () {
+    notifDiv.innerHTML = "<div class='alert alert-info'>Triggering fingerprint registration. Please place your finger...</div>";
+
+    const esp32IP = "192.168.137.42"; // your ESP32 IP
+    const studentId = "<?= htmlspecialchars($student_id) ?>"; // PHP student ID
+
+    // Step 1: Register fingerprint on ESP32
+    fetch(`http://${esp32IP}/register`)
+      .then(res => {
+        if (!res.ok) throw new Error("ESP32 not reachable");
+        return res.json();
+      })
+      .then(data => {
+        if (data.status === "registered") {
+          // Step 2: Send the returned ID to PHP backend
+          return fetch("../admin/transaction/php/save_fingerprint.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `student_id=${encodeURIComponent(studentId)}&fingerprintId=${encodeURIComponent(data.id)}`
+          })
+          .then(res => res.json())
+          .then(dbResp => {
+            if (dbResp.status === "success") {
+              notifDiv.innerHTML = `
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                  Fingerprint successfully registered and saved! ID: ${data.id}
+                  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>`;
+              registerBtn.disabled = true;
+            } else {
+              notifDiv.innerHTML = `
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                  Failed to save fingerprint: ${dbResp.message}
+                  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>`;
+            }
+          });
+        } else {
+          throw new Error(data.message || "Fingerprint registration failed");
+        }
+      })
+      .catch(err => {
+        console.error("Error:", err);
+        notifDiv.innerHTML = `
+          <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            Could not complete registration: ${err.message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>`;
+      });
+  });
+});
+</script>

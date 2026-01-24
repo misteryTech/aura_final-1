@@ -2,7 +2,6 @@
 session_start();
 require_once __DIR__ . '/../../../database/connection.php';
 
-// Fetch all student requests with biometrics status
 $query = "
     SELECT
         u.id,
@@ -12,13 +11,13 @@ $query = "
         u.date_registration,
         sb.pincode,
         sb.biometrics,
-        sb.face_token,
+        sb.faceset_token,
         CASE
             WHEN sb.student_id IS NULL
                  OR (
                       (sb.pincode IS NULL OR sb.pincode = '')
                   AND (sb.biometrics IS NULL OR sb.biometrics = '')
-                  AND (sb.face_token IS NULL OR sb.face_token = '')
+                  AND (sb.faceset_token IS NULL OR sb.faceset_token = '')
                  )
             THEN 'No biometrics'
             ELSE 'Has biometrics'
@@ -39,7 +38,6 @@ if ($result && $result->num_rows > 0) {
     }
 }
 
-// Return JSON
 header('Content-Type: application/json');
 echo json_encode($requests);
 

@@ -1,0 +1,165 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <Adafruit_Fingerprint.h>
+#include <HardwareSerial.h>
+
+// ===== Wi-Fi =====
+const char* ssid = "mistery_home";
+const char* password = "aiysfuresaill12";
+
+// ===== Web Server =====
+WebServer server(80);
+
+// ===== LCD =====
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// ===== Fingerprint =====
+HardwareSerial FingerSerial(2);
+Adafruit_Fingerprint finger(&FingerSerial);
+
+// ===== Next available ID =====
+int nextID = 1;
+bool readyToRegister = true; // Only register once
+
+// ===== Fingerprint scan function =====
+int scanFingerprint(int targetID) {
+  uint8_t p;
+  lcd.clear();
+  lcd.setCursor(0,0); lcd.print("Place Finger");
+
+  while ((p = finger.getImage()) != FINGERPRINT_OK) {
+    if (p == FINGERPRINT_NOFINGER) delay(100);
+    else return -1; // error
+  }
+
+  lcd.setCursor(0,1); lcd.print("Scanning...");
+  if(finger.image2Tz() != FINGERPRINT_OK) return -2;
+
+  if(finger.fingerFastSearch() != FINGERPRINT_OK) return 0;
+  return (finger.fingerID == targetID) ? 1 : 0;
+}
+
+// ===== Fingerprint registration function =====
+int registerFingerprint() {
+  if(!readyToRegister) return -10; // Already registered
+
+  uint8_t p;
+
+  // First scan
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("Place Finger 1");
+  while((p = finger.getImage()) != FINGERPRINT_OK){
+    if(p == FINGERPRINT_NOFINGER) delay(100);
+    else return -1;
+  }
+  if(finger.image2Tz(1) != FINGERPRINT_OK) return -2;
+
+  // Second scan
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("Place Finger 2");
+  while((p = finger.getImage()) != FINGERPRINT_OK){
+    if(p == FINGERPRINT_NOFINGER) delay(100);
+    else return -3;
+  }
+  if(finger.image2Tz(2) != FINGERPRINT_OK) return -4;
+
+  // Create model
+  if(finger.createModel() != FINGERPRINT_OK) return -5;
+
+  // Store in sensor memory
+  if(finger.storeModel(nextID) != FINGERPRINT_OK) return -6;
+
+  readyToRegister = false; // Lock registration
+  return nextID++; // Return assigned ID and increment for next
+}
+
+// ===== Web page =====
+void handleRoot() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  String html = "<!DOCTYPE html><html><head><title>ESP32 Fingerprint</title></head><body>";
+  html += "<h2>ESP32 Fingerprint</h2>";
+  html += "<button onclick=\"fetch('/scan').then(r=>r.json()).then(a=>alert(JSON.stringify(a)))\">Scan Fingerprint</button><br><br>";
+  html += "<button onclick=\"fetch('/register').then(r=>r.json()).then(a=>alert(JSON.stringify(a)))\">Register Fingerprint</button>";
+  html += "</body></html>";
+  server.send(200, "text/html", html);
+}
+
+// ===== Web handler for scanning =====
+void handleScan() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+
+  int result = scanFingerprint(nextID-1); // last registered ID
+  String response = "{";
+  if(result == 1){
+    response += "\"status\":\"matched\",\"id\":" + String(finger.fingerID);
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("MATCHED ID:"); lcd.setCursor(0,1); lcd.print(finger.fingerID);
+  } else if(result == 0){
+    response += "\"status\":\"not_matched\"";
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("Not Matched");
+  } else {
+    response += "\"status\":\"scan_failed\"";
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("Scan Failed");
+  }
+  response += "}";
+
+  while(finger.getImage() != FINGERPRINT_NOFINGER) delay(200);
+  server.send(200, "application/json", response);
+}
+
+// ===== Web handler for registration =====
+void handleRegister() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+
+  if(server.method() == HTTP_OPTIONS){
+    server.send(204);
+    return;
+  }
+
+  int regID = registerFingerprint();
+  String response = "{";
+  if(regID > 0) response += "\"status\":\"registered\",\"id\":" + String(regID);
+  else if(regID == -10) response += "\"status\":\"error\",\"message\":\"Already registered\"";
+  else response += "\"status\":\"error\",\"message\":\"Registration failed\"";
+  response += "}";
+
+  while(finger.getImage() != FINGERPRINT_NOFINGER) delay(200);
+  lcd.clear();
+  lcd.setCursor(0,0); lcd.print("Ready for scan");
+  server.send(200, "application/json", response);
+}
+
+// ===== Setup =====
+void setup() {
+  Serial.begin(115200);
+
+  Wire.begin(21,22);
+  lcd.init(); lcd.backlight(); lcd.clear(); lcd.setCursor(0,0); lcd.print("Initializing...");
+
+  FingerSerial.begin(57600, SERIAL_8N1, 16, 17);
+  finger.begin(57600);
+  if (!finger.verifyPassword()) {
+    lcd.clear(); lcd.print("FP NOT FOUND");
+    Serial.println("Fingerprint sensor NOT found!");
+    while(1);
+  }
+
+  lcd.clear(); lcd.print("FP Ready");
+
+  WiFi.begin(ssid, password);
+  lcd.setCursor(0,1); lcd.print("Connecting...");
+  while(WiFi.status() != WL_CONNECTED){ delay(500); Serial.print("."); }
+  lcd.clear(); lcd.print("WiFi Ready"); lcd.setCursor(0,1); lcd.print(WiFi.localIP());
+
+  server.on("/", handleRoot);
+  server.on("/scan", handleScan);
+  server.on("/register", HTTP_ANY, handleRegister);
+  server.begin();
+  Serial.println("Web server started");
+}
+
+// ===== Loop =====
+void loop() {
+  server.handleClient();
+}

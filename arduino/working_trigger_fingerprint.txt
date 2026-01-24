@@ -1,0 +1,144 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <Adafruit_Fingerprint.h>
+#include <HardwareSerial.h>
+
+// ===== Wi-Fi =====
+const char* ssid = "mistery_home";
+const char* password = "aiysfuresaill12";
+
+// ===== Web Server =====
+WebServer server(80);
+
+// ===== LCD =====
+LiquidCrystal_I2C lcd(0x27, 16, 2); // change to 0x3F if blank
+
+// ===== Fingerprint =====
+HardwareSerial FingerSerial(2);
+Adafruit_Fingerprint finger(&FingerSerial);
+
+// ===== Fingerprint ID to verify =====
+int testID = 2;
+
+// ===== Fingerprint scan function =====
+int scanFingerprint(int targetID) {
+  uint8_t p;
+
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Place Finger");
+
+  // Wait for finger
+  while ((p = finger.getImage()) != FINGERPRINT_OK) {
+    if (p == FINGERPRINT_NOFINGER) {
+      delay(100);
+      continue;
+    } else {
+      return -1; // error
+    }
+  }
+
+  lcd.setCursor(0,1);
+  lcd.print("Scanning...");
+
+  p = finger.image2Tz();
+  if (p != FINGERPRINT_OK) return -2;
+
+  p = finger.fingerFastSearch();
+  if (p != FINGERPRINT_OK) return 0; // not matched
+
+  if (finger.fingerID == targetID) return 1; // matched
+  return 0; // matched other ID
+}
+
+// ===== Web page =====
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head><title>Fingerprint Scan</title></head><body>";
+  html += "<h2>ESP32 Fingerprint Scan</h2>";
+  html += "<form action='/scan'><button type='submit' style='padding:15px;font-size:18px;'>Scan Fingerprint</button></form>";
+  html += "</body></html>";
+  server.send(200, "text/html", html);
+}
+
+// ===== Web handler =====
+void handleScan() {
+  int result = scanFingerprint(testID);
+
+  String response = "{";
+  if (result == 1) {
+    response += "\"status\":\"matched\",\"id\":" + String(finger.fingerID);
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("MATCHED ID:");
+    lcd.setCursor(0,1);
+    lcd.print(finger.fingerID);
+  } else if (result == 0) {
+    response += "\"status\":\"not_matched\"";
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Not Matched");
+  } else {
+    response += "\"status\":\"scan_failed\"";
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Scan Failed");
+  }
+  response += "}";
+
+  // Wait for finger removal before next scan
+  while(finger.getImage() != FINGERPRINT_NOFINGER) delay(200);
+
+  server.send(200, "application/json", response);
+}
+
+// ===== Setup =====
+void setup() {
+  Serial.begin(115200);
+
+  // Initialize LCD
+  Wire.begin(21,22);
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Initializing...");
+
+  // Initialize fingerprint
+  FingerSerial.begin(57600, SERIAL_8N1, 16, 17);
+  finger.begin(57600);
+  if (!finger.verifyPassword()) {
+    lcd.clear();
+    lcd.print("FP NOT FOUND");
+    Serial.println("Fingerprint sensor NOT found!");
+    while(1);
+  }
+
+  lcd.clear();
+  lcd.print("FP Ready");
+
+  // Connect Wi-Fi
+  WiFi.begin(ssid, password);
+  lcd.setCursor(0,1);
+  lcd.print("Connecting...");
+  while(WiFi.status() != WL_CONNECTED){
+    delay(500);
+    Serial.print(".");
+  }
+  lcd.clear();
+  lcd.print("WiFi Ready");
+  lcd.setCursor(0,1);
+  lcd.print(WiFi.localIP());
+
+  // Web routes
+  server.on("/", handleRoot);      // Web page with button
+  server.on("/scan", handleScan);  // Trigger fingerprint scan
+  server.begin();
+  Serial.println("Web server started");
+}
+
+// ===== Loop =====
+void loop() {
+  server.handleClient();
+}

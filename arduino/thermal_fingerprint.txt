@@ -1,0 +1,282 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <Adafruit_Fingerprint.h>
+#include <HardwareSerial.h>
+#include <SparkFunMLX90640.h>
+
+/* =============================
+   WIFI CONFIG (STATIC IP)
+============================= */
+const char* ssid     = "mistery_home";
+const char* password = "aiysfuresaill12";
+
+IPAddress local_IP(192,168,137,42);
+IPAddress gateway(192,168,137,1);
+IPAddress subnet(255,255,255,0);
+IPAddress dns(8,8,8,8);
+
+/* =============================
+   SERVER / LCD / FINGERPRINT
+============================= */
+WebServer server(80);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+HardwareSerial FingerSerial(2);
+Adafruit_Fingerprint finger(&FingerSerial);
+
+/* =============================
+   THERMAL CAMERA
+============================= */
+MLX90640 mlx;
+float thermalFrame[32 * 24];
+
+/* =============================
+   RESET PIN
+============================= */
+const int resetPin = 4;
+
+/* =============================
+   HELPERS
+============================= */
+void sendCORS() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+}
+
+void waitFingerRemove() {
+  while (finger.getImage() != FINGERPRINT_NOFINGER) delay(150);
+}
+
+/* =============================
+   FINGERPRINT VERIFY
+============================= */
+void handleVerify() {
+  sendCORS();
+  lcd.clear();
+  lcd.print("Place Finger");
+
+  uint8_t p;
+  while ((p = finger.getImage()) != FINGERPRINT_OK) {
+    if (p != FINGERPRINT_NOFINGER) {
+      server.send(200, "application/json",
+        "{\"status\":\"error\",\"message\":\"Scan failed\"}");
+      return;
+    }
+    delay(100);
+  }
+
+  if (finger.image2Tz() != FINGERPRINT_OK ||
+      finger.fingerFastSearch() != FINGERPRINT_OK) {
+    lcd.clear();
+    lcd.print("Not Matched");
+    waitFingerRemove();
+    server.send(200, "application/json",
+      "{\"status\":\"not_matched\"}");
+    return;
+  }
+
+  lcd.clear();
+  lcd.print("MATCH ID:");
+  lcd.setCursor(0,1);
+  lcd.print(finger.fingerID);
+
+  waitFingerRemove();
+  server.send(200, "application/json",
+    "{\"status\":\"matched\",\"id\":" + String(finger.fingerID) + "}");
+}
+
+/* =============================
+   FINGERPRINT REGISTER
+============================= */
+void handleRegister() {
+  sendCORS();
+  if (server.method() == HTTP_OPTIONS) {
+    server.send(204);
+    return;
+  }
+
+  finger.getTemplateCount();
+  int id = finger.templateCount + 1;
+
+  uint8_t p;
+  lcd.clear();
+  lcd.print("Enroll ID:");
+  lcd.print(id);
+
+  lcd.setCursor(0,1);
+  lcd.print("Place Finger");
+
+  while ((p = finger.getImage()) != FINGERPRINT_OK) {
+    if (p != FINGERPRINT_NOFINGER) {
+      server.send(200,"application/json",
+        "{\"status\":\"error\",\"message\":\"Scan failed\"}");
+      return;
+    }
+    delay(100);
+  }
+
+  if (finger.image2Tz(1) != FINGERPRINT_OK) {
+    server.send(200,"application/json",
+      "{\"status\":\"error\",\"message\":\"Image error\"}");
+    return;
+  }
+
+  waitFingerRemove();
+
+  lcd.clear();
+  lcd.print("Place Again");
+
+  while ((p = finger.getImage()) != FINGERPRINT_OK) {
+    if (p != FINGERPRINT_NOFINGER) {
+      server.send(200,"application/json",
+        "{\"status\":\"error\",\"message\":\"Scan failed\"}");
+      return;
+    }
+    delay(100);
+  }
+
+  if (finger.image2Tz(2) != FINGERPRINT_OK ||
+      finger.createModel() != FINGERPRINT_OK ||
+      finger.storeModel(id) != FINGERPRINT_OK) {
+    server.send(200,"application/json",
+      "{\"status\":\"error\",\"message\":\"Enroll failed\"}");
+    return;
+  }
+
+  lcd.clear();
+  lcd.print("Registered ID:");
+  lcd.setCursor(0,1);
+  lcd.print(id);
+
+  waitFingerRemove();
+  server.send(200,"application/json",
+    "{\"status\":\"registered\",\"id\":" + String(id) + "}");
+}
+
+/* =============================
+   THERMAL CAMERA TRIGGER
+============================= */
+void handleThermalStart() {
+  sendCORS();
+
+  if (!mlx.isConnected()) {
+    server.send(500, "application/json",
+      "{\"status\":\"error\",\"message\":\"Thermal not detected\"}");
+    return;
+  }
+
+  mlx.getFrame(thermalFrame);
+
+  String json = "{\"status\":\"ok\",\"thermal\":[";
+  for (int i = 0; i < 768; i++) {
+    json += String(thermalFrame[i], 2);
+    if (i < 767) json += ",";
+  }
+  json += "]}";
+
+  lcd.clear();
+  lcd.print("Thermal Scan");
+  lcd.setCursor(0,1);
+  lcd.print("Done");
+
+  server.send(200, "application/json", json);
+}
+
+/* =============================
+   RESET FINGERPRINT DATABASE
+============================= */
+void checkReset() {
+  if (digitalRead(resetPin) == LOW) {
+    lcd.clear();
+    lcd.print("Resetting FP");
+
+    if (finger.emptyDatabase() == FINGERPRINT_OK) {
+      lcd.clear();
+      lcd.print("FP RESET OK");
+    } else {
+      lcd.clear();
+      lcd.print("Reset Failed");
+    }
+
+    while(digitalRead(resetPin) == LOW) delay(100);
+    lcd.clear();
+    lcd.print("FP Ready");
+  }
+}
+
+/* =============================
+   ROOT PAGE
+============================= */
+void handleRoot() {
+  sendCORS();
+  server.send(200, "text/html",
+    "<h3>ESP32 Biometrics + Thermal</h3>"
+    "<button onclick=\"fetch('/verify').then(r=>r.json()).then(a=>alert(JSON.stringify(a)))\">Verify Finger</button><br><br>"
+    "<button onclick=\"fetch('/register').then(r=>r.json()).then(a=>alert(JSON.stringify(a)))\">Register Finger</button><br><br>"
+    "<button onclick=\"fetch('/thermal/start').then(r=>r.json()).then(a=>console.log(a))\">Start Thermal</button>"
+  );
+}
+
+/* =============================
+   SETUP
+============================= */
+void setup() {
+  Serial.begin(115200);
+
+  // 🔥 CUSTOM I2C PINS
+  Wire.begin(32, 33); // SDA, SCL
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.print("Initializing");
+
+  FingerSerial.begin(57600, SERIAL_8N1, 16, 17);
+  finger.begin(57600);
+  if (!finger.verifyPassword()) {
+    lcd.clear();
+    lcd.print("FP ERROR");
+    while(1);
+  }
+
+  pinMode(resetPin, INPUT_PULLUP);
+
+  if (!mlx.begin()) {
+    Serial.println("MLX90640 NOT FOUND");
+  } else {
+    mlx.setMode(MLX90640_INTERLEAVED);
+    mlx.setResolution(MLX90640_ADC_18BIT);
+    mlx.setRefreshRate(MLX90640_8_HZ);
+  }
+
+  WiFi.config(local_IP, gateway, subnet, dns);
+  WiFi.begin(ssid, password);
+
+  lcd.clear();
+  lcd.print("Connecting WiFi");
+  while (WiFi.status() != WL_CONNECTED) delay(500);
+
+  lcd.clear();
+  lcd.print("IP:");
+  lcd.setCursor(0,1);
+  lcd.print(WiFi.localIP());
+
+  server.on("/", handleRoot);
+  server.on("/verify", HTTP_GET, handleVerify);
+  server.on("/register", HTTP_ANY, handleRegister);
+  server.on("/thermal/start", HTTP_GET, handleThermalStart);
+
+  server.begin();
+  lcd.clear();
+  lcd.print("System Ready");
+}
+
+/* =============================
+   LOOP
+============================= */
+void loop() {
+  server.handleClient();
+  checkReset();
+}
